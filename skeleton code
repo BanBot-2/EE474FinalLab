@@ -1,0 +1,67 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include <RTClib.h>          
+#include <LiquidCrystal_I2C.h>  
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+#define POT_PIN 34           
+#define BUTTON_PIN 35        
+#define PHOTORESISTOR_PIN 32 
+#define BUZZER_PIN 25       
+#define LED1_PIN 26          
+#define LED2_PIN 27        
+
+// LCD Setup
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// RTC Setup
+RTC_DS3231 rtc;
+
+volatile bool alarmTriggered = false;
+int alarmHour = 0;    
+int alarmMinute = 0;  
+
+// Function declarations
+void TaskUpdateTime(void *parameter);
+void TaskUserInput(void *parameter);
+void TaskAlarmControl(void *parameter);
+
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize LCD
+  lcd.init();
+  lcd.backlight();
+
+  // Initialize RTC
+  if (!rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    while (1);
+  }
+
+  // Initialize Pins
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED1_PIN, OUTPUT);
+  pinMode(LED2_PIN, OUTPUT);
+
+  // Create FreeRTOS tasks
+  xTaskCreatePinnedToCore(
+    TaskUpdateTime, "UpdateTime", 4096, NULL, 1, NULL, 0);      // Run on core 0
+  xTaskCreatePinnedToCore(
+    TaskAlarmControl, "AlarmCtrl", 2048, NULL, 1, NULL, 1);     // Run on core 1
+}
+
+void loop() {
+  delay(1000);
+}
+
+// Task: Update and display time
+void TaskUpdateTime(void *parameter) {
+}
+
+
+// Task: Alarm control logic
+void TaskAlarmControl(void *parameter) {
+}
