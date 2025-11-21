@@ -24,7 +24,6 @@ int alarmMinute = 0;
 
 // Function declarations
 void TaskUpdateTime(void *parameter);
-void TaskUserInput(void *parameter);
 void TaskAlarmControl(void *parameter);
 
 void setup() {
@@ -57,11 +56,11 @@ void loop() {
   delay(1000);
 }
 
-// Task: Update and display time
+// Update and display time
 void TaskUpdateTime(void *parameter) {
 }
 
 
-// Task: Alarm control logic
+// Alarm control logic
 void TaskAlarmControl(void *parameter) {
 }
