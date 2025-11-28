@@ -7,7 +7,7 @@
  * @version 2.0
  * @details
  * ### Update History
- * - **2025-11-26** (Update 4): Yehoshua wrapped up all code except IR
+ * - **2025-11-26** (Update 4): Yehoshua wrapped up final code
  * - **2025-11-26** (Update 3): Yehoshua finished base function code
  * - **2025-11-25** (Update 2): Yehoshua wrote task function drafts
  * - **2025-11-20** (Update 1): Skeleton code by Carter
@@ -43,14 +43,15 @@
 #define IR_PIN 37
 
 // Configuration
-#define POT_THRESH 300
-#define DEBOUNCE_US 200000
+#define POT_THRESH 400
+#define IR_DEBOUNCE_MS 250
 #define BACKLIGHT_THRESH 1280
+#define BUTTON_DEBOUNCE_US 200000
 
-#define IR_INTERVAL_MS 20         // 50Hz
-#define RTC_INTERVAL_MS 100       // 10Hz
-#define LCD_INTERVAL_MS 32        // 32Hz
-#define ALARM_INTERVAL_MS 1000    // 1Hz
+#define IR_INTERVAL_MS 16         // 64Hz
+#define RTC_INTERVAL_MS 32        // 32Hz
+#define LCD_INTERVAL_MS 20        // 50Hz
+#define ALARM_INTERVAL_MS 500     // 2Hz
 #define PHOTO_POT_INTERVAL_MS 50  // 20Hz
 
 
@@ -61,33 +62,27 @@ RTC_DS3231 rtc;                      // Initializes RTC library object
 
 
 // =========================================== Handles ============================================
+QueueHandle_t xPotQueue;
+QueueHandle_t xPhotoQueue;
 QueueHandle_t xAlarmQueue;
-QueueHandle_t xRemoteQueue;
 
 TaskHandle_t xTaskRTC;
 TaskHandle_t xTaskLCD;
 TaskHandle_t xTaskAlarm;
+TaskHandle_t xTaskIR;
 
-SemaphoreHandle_t xAlarmMutex;
 SemaphoreHandle_t xEnabledMutex;
 SemaphoreHandle_t xTimeTempMutex;
-SemaphoreHandle_t xPhotoPotMutex;
 
-hw_timer_t* xDebounceTimer = NULL;
-hw_timer_t* xAlarmTimer = NULL;
+hw_timer_t *xDebounceTimer = NULL;
+hw_timer_t *xAlarmTimer = NULL;
 
 
 // ======================================= Global Variables =======================================
 DateTime currentTime = DateTime((uint32_t)0);
-float currentTemp = 0.0;
-
-uint16_t potReading = 0;
-uint16_t photoReading = 0;
-
-bool alarmEnabled = false;
-bool alarmStarted = false;
-
 volatile uint64_t lastDebounceTime = 0;
+float currentTemp = 0.0;
+bool alarmEnabled = false;
 
 uint8_t bell[8] = {
   0x04,  //   *
@@ -106,13 +101,18 @@ void IRAM_ATTR buttonInterrupt() {
   bool buttonState = gpio_get_level((gpio_num_t)BUTTON_PIN);
   uint64_t debounceTime = timerRead(xDebounceTimer);
 
-  if (debounceTime - lastDebounceTime > DEBOUNCE_US) {
+  if (debounceTime - lastDebounceTime > BUTTON_DEBOUNCE_US) {
     lastDebounceTime = debounceTime;
 
     if (buttonState == LOW) {
       vTaskNotifyGiveFromISR(xTaskLCD, NULL);
     }
   }
+}
+
+
+void IRAM_ATTR remoteInterrupt() {
+  vTaskNotifyGiveFromISR(xTaskIR, NULL);
 }
 
 
@@ -138,10 +138,11 @@ void vTaskLCD(void *pvParameters) {
 
   DateTime lastTime = DateTime((uint32_t)0);
   DateTime alarmTime = DateTime((uint32_t)0);
-
   float lastTemp = 0.0;
-  uint16_t lastPot = 0;
-  uint16_t lastPhoto = 0;
+
+  uint16_t potReading = 0;
+  uint16_t photoReading = 0;
+  uint16_t lastPotReading = 0;
 
   uint8_t hourMap = 0;
   uint8_t minuteMap = 0;
@@ -149,40 +150,35 @@ void vTaskLCD(void *pvParameters) {
   uint8_t lastMinuteMap = 0;
 
   bool backlight = true;
-  bool lastBacklight = true;
   bool updateLCD = true;
 
   lcd.createChar(0, bell);  // Creates bell character
   lcd.backlight();          // Starts with backlight on
 
   while (true) {
-    // Checks for backlight updates
-    if (lastPhoto < BACKLIGHT_THRESH) {
-      backlight = true;
+    xQueueReceive(xPhotoQueue, &photoReading, 0);  // Fetches most recent light reading
 
-      if (lastBacklight == false) {
+    // Checks for backlight updates
+    if (photoReading < BACKLIGHT_THRESH) {
+      if (backlight == false) {
         lcd.backlight();
+        backlight = true;
       }
     } else {
-      backlight = false;
-
-      if (lastBacklight == true) {
+      if (backlight == true) {
         lcd.noBacklight();
+        backlight = false;
       }
     }
 
-    lastBacklight = backlight;  // Updates backlight tracking
-
     switch (currentState) {
       case STATE_TIME:
-        if (xSemaphoreTake(xPhotoPotMutex, portMAX_DELAY)) {
+        // Fetches most recent potentiometer readings
+        if (xQueueReceive(xPotQueue, &potReading, 0)) {
           // Checks if potentiometer was moved
-          if (abs(potReading - lastPot) > POT_THRESH) {
+          if (abs(potReading - lastPotReading) > POT_THRESH) {
             currentState = STATE_SET_HOUR;  // Moves to next state
           }
-
-          lastPhoto = photoReading;        // Grabs next photo reading
-          xSemaphoreGive(xPhotoPotMutex);  // Gives back mutex
         }
 
         // Checks for new button notifications
@@ -245,12 +241,8 @@ void vTaskLCD(void *pvParameters) {
         }
 
         // Grabs new poteniometer reading once ready
-        if (xSemaphoreTake(xPhotoPotMutex, portMAX_DELAY)) {
-          lastPot = potReading;            // Grabs new pot reading
-          lastPhoto = photoReading;        // Grabs next photo reading
-          xSemaphoreGive(xPhotoPotMutex);  // Gives back mutex
-
-          hourMap = map(lastPot, 0, 4095, 0, 23);  // Maps reading to hour
+        if (xQueueReceive(xPotQueue, &lastPotReading, 0)) {
+          hourMap = map(lastPotReading, 0, 4095, 0, 23);  // Maps reading to hour
         }
 
         // Checks if mapped value changed
@@ -265,25 +257,20 @@ void vTaskLCD(void *pvParameters) {
       case STATE_SET_MINUTE:
         // Checks for new button notifications
         if (ulTaskNotifyTake(pdTRUE, 0)) {
-          alarmTime = DateTime(0, 0, 0, lastHourMap, lastMinuteMap, 0);  // Sets alarm time
-          xQueueSend(xAlarmQueue, &alarmTime, portMAX_DELAY);            // Sends new alarm time
-
           if (xSemaphoreTake(xEnabledMutex, portMAX_DELAY)) {
             alarmEnabled = true;            // Marks alarm as enabled upon receiving mutex
             xSemaphoreGive(xEnabledMutex);  // Gives back mutex
           }
 
+          alarmTime = DateTime(0, 0, 0, lastHourMap, lastMinuteMap, 0);  // Sets alarm time
+          xQueueSend(xAlarmQueue, &alarmTime, portMAX_DELAY);            // Sends new alarm time
           currentState = STATE_TIME;
           updateLCD = true;
         }
 
         // Grabs new poteniometer reading once ready
-        if (xSemaphoreTake(xPhotoPotMutex, portMAX_DELAY)) {
-          lastPot = potReading;            // Grabs new pot reading
-          lastPhoto = photoReading;        // Grabs next photo reading
-          xSemaphoreGive(xPhotoPotMutex);  // Gives back mutex
-
-          minuteMap = map(lastPot, 0, 4095, 0, 59);  // Maps reading to hour
+        if (xQueueReceive(xPotQueue, &lastPotReading, 0)) {
+          minuteMap = map(lastPotReading, 0, 4095, 0, 59);  // Maps reading to minute
         }
 
         // Checks if mapped value changed
@@ -303,7 +290,8 @@ void vTaskLCD(void *pvParameters) {
 
 
 void vTaskRTC(void *pvParameters) {
-  DateTime alarmTime;  // Holds alarm set time
+  DateTime alarmTime;         // Holds alarm set time
+  bool alarmStarted = false;  // Tracks whether alarm has started
 
   rtc.disableAlarm(1);  // Disables any past alarm
   rtc.clearAlarm(1);    // Clears any past alarm flag
@@ -326,7 +314,7 @@ void vTaskRTC(void *pvParameters) {
 
     // Toggles alarm if notification given
     if (ulTaskNotifyTake(pdTRUE, 0)) {
-      if (xSemaphoreTake(xEnabledMutex, portMAX_DELAY)) {        
+      if (xSemaphoreTake(xEnabledMutex, portMAX_DELAY)) {
         if (alarmEnabled) {
           rtc.setAlarm1(alarmTime, DS3231_A1_Hour);  // Sets alarm
         } else {
@@ -334,33 +322,31 @@ void vTaskRTC(void *pvParameters) {
           rtc.clearAlarm(1);                                     // Clears alarm flag
         }
 
-        xSemaphoreGive(xEnabledMutex);  // gives back mutex
+        xSemaphoreGive(xEnabledMutex);  // Gives back mutex
       }
     }
 
     // Manages alarm indicators
     if (rtc.alarmFired(1)) {
-      if (xSemaphoreTake(xAlarmMutex, portMAX_DELAY)) {
-        if (!alarmStarted) {
-          // Sets buzzer and red LED
-          analogWrite(BUZZER_PIN, 128);
-          digitalWrite(RED_LED_PIN, HIGH);
-          alarmStarted = true;  // Updates flag
-        }
+      if (!alarmStarted) {
+        // Starts buzzer and LEDs
+        analogWrite(BUZZER_PIN, 128);
+        digitalWrite(RED_LED_PIN, HIGH);
+        digitalWrite(BLUE_LED_PIN, HIGH);
 
-        xSemaphoreGive(xAlarmMutex);  // gives back mutex
+        timerRestart(xAlarmTimer);  // Resets timer counter
+        timerStart(xAlarmTimer);    // Starts pattern timer
+        alarmStarted = true;        // Updates flag
       }
     } else {
-      if (xSemaphoreTake(xAlarmMutex, portMAX_DELAY)) {
-        if (alarmStarted) {
-          // Turns off buzzer and LEDs
-          analogWrite(BUZZER_PIN, 0);
-          digitalWrite(RED_LED_PIN, LOW);
-          digitalWrite(BLUE_LED_PIN, LOW);
-          alarmStarted = false;  // Updates flag
-        }
+      if (alarmStarted) {
+        alarmStarted = false;    // Updates flag
+        timerStop(xAlarmTimer);  // Stops pattern timer
 
-        xSemaphoreGive(xAlarmMutex);  // gives back mutex
+        // Turns off buzzer and LEDs
+        analogWrite(BUZZER_PIN, 0);
+        digitalWrite(RED_LED_PIN, LOW);
+        digitalWrite(BLUE_LED_PIN, LOW);
       }
     }
 
@@ -371,45 +357,45 @@ void vTaskRTC(void *pvParameters) {
 
 void vTaskAlarm(void *pvParameters) {
   while (true) {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // Waits for notification
-
-    // Updates LEDs upon receiving mutex
-    if (xSemaphoreTake(xAlarmMutex, portMAX_DELAY)) {
-      if (alarmStarted) {
-        digitalWrite(RED_LED_PIN, !digitalRead(RED_LED_PIN));
-        digitalWrite(BLUE_LED_PIN, !digitalRead(BLUE_LED_PIN));
-      }
-
-      xSemaphoreGive(xAlarmMutex);  // gives back mutex
-    }
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);                 // Waits for notification
+    digitalWrite(RED_LED_PIN, !digitalRead(RED_LED_PIN));    // Toggles red LED
+    digitalWrite(BLUE_LED_PIN, !digitalRead(BLUE_LED_PIN));  // Toggles blue LED
   }
 }
 
 
 void vTaskIR(void *pvParameters) {
+  uint32_t pulseCountIR = 0;
+
   while (true) {
-    int level = digitalRead(IR_PIN);
-    if (level == LOW) {
+    pulseCountIR = ulTaskNotifyTake(pdTRUE, 0);
+    
+    if (pulseCountIR > 8) {
+      xTaskNotifyGive(xTaskLCD);
+      vTaskDelay(pdMS_TO_TICKS(IR_DEBOUNCE_MS));
+      ulTaskNotifyTake(pdTRUE, 0);
     }
 
-    vTaskDelay(pdMS_TO_TICKS(IR_INTERVAL_MS));
+    vTaskDelay(IR_INTERVAL_MS);
   }
 }
 
 
 void vTaskPhotoPot(void *pvParameters) {
-  while (true) {
-    if (xSemaphoreTake(xPhotoPotMutex, portMAX_DELAY)) {
-      // Fetches analog readings
-      potReading = analogRead(POT_PIN);
-      photoReading = analogRead(PHOTO_PIN);
+  uint16_t potReading = 0;
+  uint16_t photoReading = 0;
 
-      xSemaphoreGive(xPhotoPotMutex);  // Gives back mutex
-    }
+  while (true) {
+    potReading = analogRead(POT_PIN);
+    photoReading = analogRead(PHOTO_PIN);
+
+    xQueueSend(xPotQueue, &potReading, portMAX_DELAY);
+    xQueueSend(xPhotoQueue, &photoReading, portMAX_DELAY);
 
     vTaskDelay(pdMS_TO_TICKS(PHOTO_POT_INTERVAL_MS));
   }
 }
+
 
 
 // ============================================ Setup =============================================
@@ -430,32 +416,30 @@ void setup() {
   rtc.begin(&RTC_I2C_BUS);  // Initializes RTC module
 
   xDebounceTimer = timerBegin(1000000);  // Initializes debounce hardware timer at 1MHz
-  xAlarmTimer = timerBegin(1000);  // Initializes alarm hardware timer at 1kHz
+  xAlarmTimer = timerBegin(1000);        // Initializes alarm hardware timer at 1kHz
 
   // Creates semaphores
-  xAlarmMutex = xSemaphoreCreateMutex();
   xEnabledMutex = xSemaphoreCreateMutex();
   xTimeTempMutex = xSemaphoreCreateMutex();
-  xPhotoPotMutex = xSemaphoreCreateMutex();
 
   // Creates queues
+  xPotQueue = xQueueCreate(5, sizeof(uint16_t));
+  xPhotoQueue = xQueueCreate(5, sizeof(uint16_t));
   xAlarmQueue = xQueueCreate(5, sizeof(DateTime));
-  xRemoteQueue = xQueueCreate(5, sizeof(uint16_t));
 
   // Creates tasks
   xTaskCreatePinnedToCore(vTaskRTC, "TaskRTC", 4096, NULL, 5, &xTaskRTC, 1);
   xTaskCreatePinnedToCore(vTaskLCD, "TaskLCD", 4096, NULL, 3, &xTaskLCD, 0);
   xTaskCreatePinnedToCore(vTaskPhotoPot, "TaskPhotoPot", 2048, NULL, 4, NULL, 1);
-  xTaskCreatePinnedToCore(vTaskAlarm, "TaskAlarm", 2048, NULL, 2, &xTaskAlarm, 0);
-  xTaskCreatePinnedToCore(vTaskIR, "TaskIR", 2048, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(vTaskAlarm, "TaskAlarm", 2048, NULL, 6, &xTaskAlarm, 0);
+  xTaskCreatePinnedToCore(vTaskIR, "TaskIR", 2048, NULL, 2, &xTaskIR, 1);
 
   // Attaches interupts
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonInterrupt, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(IR_PIN), remoteInterrupt, FALLING);
   timerAttachInterrupt(xAlarmTimer, &alarmInterrupt);
-
-  // Starts alarm timer
-  timerAlarm(xAlarmTimer, 1000, true, 0);
-  timerStart(xAlarmTimer);
+  timerAlarm(xAlarmTimer, ALARM_INTERVAL_MS, true, 0);  // Configures timer alarm settings
+  timerStop(xAlarmTimer);                               // Initially stops the timer
 }
 
 
