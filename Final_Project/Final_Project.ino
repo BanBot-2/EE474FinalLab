@@ -1,10 +1,10 @@
 /**
  * @file Final_Project.ino
  * @author Yehoshua Luna & Carter Lee
- * @date 2025-11-25
+ * @date 2025-11-27
  * @brief Digital alarm clock project using RTC module, LCD module, IR remote, LEDs, button, and photoresistor.
  *
- * @version 2.0
+ * @version 4.0
  * @details
  * ### Update History
  * - **2025-11-26** (Update 4): Yehoshua wrapped up final code
@@ -26,64 +26,125 @@
 
 
 // ============================================ Macros ============================================
-
 // Pin definitions
+/** @def POT_PIN
+ * @brief Analog pin connected to the potentiometer for setting the alarm time. */
 #define POT_PIN 1
+/** @def PHOTO_PIN
+ * @brief Analog pin connected to the photoresistor (LDR) for ambient light sensing. */
 #define PHOTO_PIN 4
+/** @def BUTTON_PIN
+ * @brief Digital pin connected to the alarm toggle/snooze button. Configured with PULLUP. */
 #define BUTTON_PIN 5
+/** @def BUZZER_PIN
+ * @brief Digital pin connected to the buzzer for the alarm sound. */
 #define BUZZER_PIN 6
+/** @def RED_LED_PIN
+ * @brief Digital pin connected to the Red LED, used for alarm visual indication. */
 #define RED_LED_PIN 7
+/** @def BLUE_LED_PIN
+ * @brief Digital pin connected to the Blue LED, used for alarm visual indication. */
 #define BLUE_LED_PIN 17
 
+/** @def LCD_SCL
+ * @brief I2C SCL pin for the LCD module. */
 #define LCD_SCL 13
+/** @def LCD_SDA
+ * @brief I2C SDA pin for the LCD module. */
 #define LCD_SDA 14
+/** @def RTC_SCL
+ * @brief I2C SCL pin for the RTC module (on bus 1). */
 #define RTC_SCL 35
+/** @def RTC_SDA
+ * @brief I2C SDA pin for the RTC module (on bus 1). */
 #define RTC_SDA 36
 
+/** @def IR_PIN
+ * @brief Digital pin connected to the IR receiver module. */
 #define IR_PIN 37
 
 // Configuration
+/** @def POT_THRESH
+ * @brief Threshold value for detecting a significant change in potentiometer reading (used for alarm setting mode transition). */
 #define POT_THRESH 400
+/** @def IR_DEBOUNCE_MS
+ * @brief Debounce time in milliseconds for the IR remote input, preventing rapid accidental triggers. */
 #define IR_DEBOUNCE_MS 250
+/** @def BACKLIGHT_THRESH
+ * @brief Analog reading threshold from the photoresistor to determine if the LCD backlight should be turned off (high light) or on (low light). */
 #define BACKLIGHT_THRESH 1280
+/** @def BUTTON_DEBOUNCE_US
+ * @brief Debounce time in microseconds for the button interrupt, preventing spurious triggers. */
 #define BUTTON_DEBOUNCE_US 200000
 
-#define IR_INTERVAL_MS 16         // 64Hz
-#define RTC_INTERVAL_MS 32        // 32Hz
-#define LCD_INTERVAL_MS 20        // 50Hz
-#define ALARM_INTERVAL_MS 500     // 2Hz
-#define PHOTO_POT_INTERVAL_MS 50  // 20Hz
+/** @def IR_INTERVAL_MS
+ * @brief Task delay in milliseconds for the IR task (approx 64Hz loop rate). */
+#define IR_INTERVAL_MS 16
+/** @def RTC_INTERVAL_MS
+ * @brief Task delay in milliseconds for the RTC task (approx 32Hz loop rate). */
+#define RTC_INTERVAL_MS 32
+/** @def LCD_INTERVAL_MS
+ * @brief Task delay in milliseconds for the LCD update task (approx 50Hz loop rate). */
+#define LCD_INTERVAL_MS 20
+/** @def ALARM_INTERVAL_MS
+ * @brief Interrupt timer interval in milliseconds for the alarm LED flashing pattern (2Hz toggle rate). */
+#define ALARM_INTERVAL_MS 500
+/** @def PHOTO_POT_INTERVAL_MS
+ * @brief Task delay in milliseconds for the photoresistor and potentiometer reading task (approx 20Hz loop rate). */
+#define PHOTO_POT_INTERVAL_MS 50
 
 
 // ========================================= Object Setup =========================================
-TwoWire RTC_I2C_BUS = TwoWire(1);    // Separate I2C bus for RTC
-LiquidCrystal_I2C lcd(0x27, 16, 2);  // LCD setup on global Wire I2C bus
-RTC_DS3231 rtc;                      // Initializes RTC library object
+/** @brief Separate I2C bus object for the RTC module. */
+TwoWire RTC_I2C_BUS = TwoWire(1);
+/** @brief LiquidCrystal_I2C object for controlling the 16x2 LCD display. */
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+/** @brief RTC_DS3231 object for interacting with the DS3231 Real-Time Clock module. */
+RTC_DS3231 rtc;
 
 
 // =========================================== Handles ============================================
+/** @brief Queue handle for transmitting potentiometer readings (uint16_t) to the LCD task. */
 QueueHandle_t xPotQueue;
+/** @brief Queue handle for transmitting photoresistor readings (uint16_t) to the LCD task. */
 QueueHandle_t xPhotoQueue;
+/** @brief Queue handle for transmitting the newly set alarm time (DateTime) from the LCD task to the RTC task. */
 QueueHandle_t xAlarmQueue;
 
+/** @brief Task handle for the Real-Time Clock management task. */
 TaskHandle_t xTaskRTC;
+/** @brief Task handle for the Liquid Crystal Display update and alarm setting task. */
 TaskHandle_t xTaskLCD;
+/** @brief Task handle for the Alarm LED flashing pattern task. */
 TaskHandle_t xTaskAlarm;
+/** @brief Task handle for the Infrared remote receiver handling task. */
 TaskHandle_t xTaskIR;
 
+/** @brief Mutex to protect access to the \ref alarmEnabled global variable. */
 SemaphoreHandle_t xEnabledMutex;
+/** @brief Mutex to protect access to the \ref currentTime and \ref currentTemp global variables. */
 SemaphoreHandle_t xTimeTempMutex;
 
+/** @brief Hardware timer handle used for button debounce timing. */
 hw_timer_t *xDebounceTimer = NULL;
+/** @brief Hardware timer handle used to trigger the alarm flashing pattern. */
 hw_timer_t *xAlarmTimer = NULL;
 
 
 // ======================================= Global Variables =======================================
+/** @brief Global variable storing the current time and date fetched from the RTC module.
+ * Protected by \ref xTimeTempMutex. */
 DateTime currentTime = DateTime((uint32_t)0);
+/** @brief Volatile variable storing the last time the button was registered as pressed/released, used for hardware interrupt debouncing. */
 volatile uint64_t lastDebounceTime = 0;
+/** @brief Global variable storing the current temperature reading from the RTC module in degrees Celsius.
+ * Protected by \ref xTimeTempMutex. */
 float currentTemp = 0.0;
+/** @brief Flag indicating whether the alarm is currently enabled (`true`) or disabled (`false`).
+ * Protected by \ref xEnabledMutex. */
 bool alarmEnabled = false;
 
+/** @brief Custom character array for the LCD display, representing a small bell icon to indicate the alarm is enabled. */
 uint8_t bell[8] = {
   0x04,  //   *
   0x0E,  //  ***
@@ -97,6 +158,12 @@ uint8_t bell[8] = {
 
 
 // ========================================== Interrupts ==========================================
+/**
+ * @brief Interrupt Service Routine (ISR) triggered by a change on the button pin (\ref BUTTON_PIN).
+ *
+ * This ISR implements debouncing logic using a hardware timer. If the button state change is stable,
+ * it notifies the \ref xTaskLCD to handle the alarm enable/disable toggle or mode change.
+ */
 void IRAM_ATTR buttonInterrupt() {
   bool buttonState = gpio_get_level((gpio_num_t)BUTTON_PIN);
   uint64_t debounceTime = timerRead(xDebounceTimer);
@@ -110,18 +177,38 @@ void IRAM_ATTR buttonInterrupt() {
   }
 }
 
-
+/**
+ * @brief Interrupt Service Routine (ISR) triggered by a falling edge on the IR receiver pin (\ref IR_PIN).
+ *
+ * This ISR notifies the \ref xTaskIR to process the IR signal.
+ */
 void IRAM_ATTR remoteInterrupt() {
   vTaskNotifyGiveFromISR(xTaskIR, NULL);
 }
 
-
+/**
+ * @brief Interrupt Service Routine (ISR) triggered by the hardware alarm timer (\ref xAlarmTimer).
+ *
+ * This ISR notifies the \ref xTaskAlarm to toggle the LED flash pattern.
+ */
 void IRAM_ATTR alarmInterrupt() {
   vTaskNotifyGiveFromISR(xTaskAlarm, NULL);
 }
 
 
 // ======================================== Task Functions ========================================
+/**
+ * @brief FreeRTOS Task for managing the Liquid Crystal Display (LCD) and handling alarm setting logic.
+ *
+ * This task is responsible for:
+ * 1. Reading ambient light from \ref xPhotoQueue to control the LCD backlight.
+ * 2. Displaying the current time and temperature.
+ * 3. Toggling the alarm state based on button input.
+ * 4. Transitioning to alarm setting modes (hour and minute) based on potentiometer movement.
+ * 5. Reading potentiometer input to set the alarm hour and minute, and sending the new time via \ref xAlarmQueue.
+ *
+ * @param pvParameters Not used.
+ */
 void vTaskLCD(void *pvParameters) {
   const char *days[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
   char upperDisplayBuffer[32];  // DAY  HH:MM AM
@@ -288,7 +375,17 @@ void vTaskLCD(void *pvParameters) {
   }
 }
 
-
+/**
+ * @brief FreeRTOS Task for managing the Real-Time Clock (RTC) module.
+ *
+ * This task is responsible for:
+ * 1. Periodically reading the current time and temperature from the RTC and updating \ref currentTime and \ref currentTemp (protected by \ref xTimeTempMutex).
+ * 2. Receiving new alarm times from \ref xAlarmQueue and configuring the RTC alarm.
+ * 3. Handling notifications from \ref xTaskLCD to enable/disable the RTC alarm setting.
+ * 4. Checking if the RTC alarm has fired and starting/stopping the physical alarm (buzzer and LED timers).
+ *
+ * @param pvParameters Not used.
+ */
 void vTaskRTC(void *pvParameters) {
   DateTime alarmTime;         // Holds alarm set time
   bool alarmStarted = false;  // Tracks whether alarm has started
@@ -354,7 +451,14 @@ void vTaskRTC(void *pvParameters) {
   }
 }
 
-
+/**
+ * @brief FreeRTOS Task to handle the blinking pattern for the alarm LEDs.
+ *
+ * This task waits for notifications from the \ref alarmInterrupt (triggered by \ref xAlarmTimer)
+ * and toggles the state of the Red and Blue LEDs (\ref RED_LED_PIN, \ref BLUE_LED_PIN) to create a flashing effect.
+ *
+ * @param pvParameters Not used.
+ */
 void vTaskAlarm(void *pvParameters) {
   while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);                 // Waits for notification
@@ -363,7 +467,15 @@ void vTaskAlarm(void *pvParameters) {
   }
 }
 
-
+/**
+ * @brief FreeRTOS Task to handle the Infrared (IR) remote input.
+ *
+ * This task processes notifications from the \ref remoteInterrupt and implements an IR
+ * debouncing mechanism. If a valid IR pulse count is detected (indicating a remote button press),
+ * it sends a notification to \ref xTaskLCD, simulating a button press (e.g., for snooze/confirm).
+ *
+ * @param pvParameters Not used.
+ */
 void vTaskIR(void *pvParameters) {
   uint32_t pulseCountIR = 0;
 
@@ -380,7 +492,14 @@ void vTaskIR(void *pvParameters) {
   }
 }
 
-
+/**
+ * @brief FreeRTOS Task for reading the Photoreistor (LDR) and Potentiometer (POT) analog values.
+ *
+ * This task reads the analog inputs from \ref POT_PIN and \ref PHOTO_PIN and sends the values
+ * to their respective queues (\ref xPotQueue, \ref xPhotoQueue) for other tasks to use.
+ *
+ * @param pvParameters Not used.
+ */
 void vTaskPhotoPot(void *pvParameters) {
   uint16_t potReading = 0;
   uint16_t photoReading = 0;
@@ -397,8 +516,14 @@ void vTaskPhotoPot(void *pvParameters) {
 }
 
 
-
 // ============================================ Setup =============================================
+/**
+ * @brief System initialization function.
+ *
+ * Initializes serial communication, I2C buses for LCD and RTC, configures all peripheral pins,
+ * initializes the LCD and RTC modules, creates FreeRTOS synchronization primitives (queues, mutexes),
+ * creates all FreeRTOS tasks, and attaches hardware interrupts.
+ */
 void setup() {
   Serial.begin(115200);                 // Opens serial connection
   Wire.begin(LCD_SDA, LCD_SCL);         // Initializes LCD I2C bus, which is just global Wire bus
@@ -444,4 +569,9 @@ void setup() {
 
 
 // ============================================= Loop =============================================
+/**
+ * @brief The main Arduino loop function.
+ *
+ * This function is left blank because all control and scheduling is handled by FreeRTOS tasks.
+ */
 void loop(){};  // Blank because FreeRTOS handles all task scheduling
