@@ -64,9 +64,12 @@
 #define IR_PIN 37
 
 // Configuration
+/** @def IR_THRESH
+ * @brief IR pulse number threshold to register an input from the remote/receiver. */
+#define IR_THRESH 8
 /** @def POT_THRESH
  * @brief Threshold value for detecting a significant change in potentiometer reading (used for alarm setting mode transition). */
-#define POT_THRESH 400
+#define POT_THRESH 500
 /** @def IR_DEBOUNCE_MS
  * @brief Debounce time in milliseconds for the IR remote input, preventing rapid accidental triggers. */
 #define IR_DEBOUNCE_MS 250
@@ -465,7 +468,7 @@ void vTaskIR(void *pvParameters) {
   while (true) {
     pulseCountIR = ulTaskNotifyTake(pdTRUE, 0);
     
-    if (pulseCountIR > 8) {
+    if (pulseCountIR > IR_THRESH) {
       xTaskNotifyGive(xTaskLCD);
       vTaskDelay(pdMS_TO_TICKS(IR_DEBOUNCE_MS));
       ulTaskNotifyTake(pdTRUE, 0);
@@ -539,7 +542,7 @@ void setup() {
   xTaskCreatePinnedToCore(vTaskRTC, "TaskRTC", 4096, NULL, 5, &xTaskRTC, 1);
   xTaskCreatePinnedToCore(vTaskLCD, "TaskLCD", 4096, NULL, 2, &xTaskLCD, 0);
   xTaskCreatePinnedToCore(vTaskPhotoPot, "TaskPhotoPot", 2048, NULL, 4, NULL, 1);
-  xTaskCreatePinnedToCore(vTaskIR, "TaskIR", 2048, NULL, 3, &xTaskIR, 1);
+  xTaskCreatePinnedToCore(vTaskIR, "TaskIR", 2048, NULL, 3, &xTaskIR, 0);
 
   // Attaches interupts
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonInterrupt, CHANGE);

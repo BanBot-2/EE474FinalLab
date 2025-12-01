@@ -127,7 +127,9 @@ Macros</h2></td></tr>
 <tr class="memdesc:ad137b49d8266b56bb6063ba8c882b1e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">I2C SDA pin for the RTC module (on bus 1).  <br /></td></tr>
 <tr class="memitem:a3b0a1d1d72b10a9c0c95adeb235d19f4" id="r_a3b0a1d1d72b10a9c0c95adeb235d19f4"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3b0a1d1d72b10a9c0c95adeb235d19f4">IR_PIN</a>&#160;&#160;&#160;37</td></tr>
 <tr class="memdesc:a3b0a1d1d72b10a9c0c95adeb235d19f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Digital pin connected to the IR receiver module.  <br /></td></tr>
-<tr class="memitem:a8a0ec80330860ec1d1fec5375e206acd" id="r_a8a0ec80330860ec1d1fec5375e206acd"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8a0ec80330860ec1d1fec5375e206acd">POT_THRESH</a>&#160;&#160;&#160;400</td></tr>
+<tr class="memitem:a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1" id="r_a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1">IR_THRESH</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memdesc:a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1"><td class="mdescLeft">&#160;</td><td class="mdescRight">IR pulse number threshold to register an input from the remote/receiver.  <br /></td></tr>
+<tr class="memitem:a8a0ec80330860ec1d1fec5375e206acd" id="r_a8a0ec80330860ec1d1fec5375e206acd"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8a0ec80330860ec1d1fec5375e206acd">POT_THRESH</a>&#160;&#160;&#160;500</td></tr>
 <tr class="memdesc:a8a0ec80330860ec1d1fec5375e206acd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Threshold value for detecting a significant change in potentiometer reading (used for alarm setting mode transition).  <br /></td></tr>
 <tr class="memitem:a71330b21a20540efac37de23d39106af" id="r_a71330b21a20540efac37de23d39106af"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a71330b21a20540efac37de23d39106af">IR_DEBOUNCE_MS</a>&#160;&#160;&#160;250</td></tr>
 <tr class="memdesc:a71330b21a20540efac37de23d39106af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Debounce time in milliseconds for the IR remote input, preventing rapid accidental triggers.  <br /></td></tr>
@@ -364,6 +366,22 @@ Update History</h3>
 
 </div>
 </div>
+<a id="a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1" name="a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1">&#9670;&#160;</a></span>IR_THRESH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define IR_THRESH&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>IR pulse number threshold to register an input from the remote/receiver. </p>
+
+</div>
+</div>
 <a id="aa55cec7757f265b63f0881513db6c359" name="aa55cec7757f265b63f0881513db6c359"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa55cec7757f265b63f0881513db6c359">&#9670;&#160;</a></span>LCD_INTERVAL_MS</h2>
 
@@ -467,7 +485,7 @@ Update History</h3>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define POT_THRESH&#160;&#160;&#160;400</td>
+          <td class="memname">#define POT_THRESH&#160;&#160;&#160;500</td>
         </tr>
       </table>
 </div><div class="memdoc">

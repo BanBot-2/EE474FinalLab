@@ -9,6 +9,7 @@ var _final___project_8ino =
     [ "IR_DEBOUNCE_MS", "_final___project_8ino.html#a71330b21a20540efac37de23d39106af", null ],
     [ "IR_INTERVAL_MS", "_final___project_8ino.html#aa2537b79dfd7e3fa39b48bab871a095c", null ],
     [ "IR_PIN", "_final___project_8ino.html#a3b0a1d1d72b10a9c0c95adeb235d19f4", null ],
+    [ "IR_THRESH", "_final___project_8ino.html#a9e6a6e6fad6ec7f4c5f8ddd0d0e78ac1", null ],
     [ "LCD_INTERVAL_MS", "_final___project_8ino.html#aa55cec7757f265b63f0881513db6c359", null ],
     [ "LCD_SCL", "_final___project_8ino.html#a6b791b8537a0ffe4dc66762e91f24fe0", null ],
     [ "LCD_SDA", "_final___project_8ino.html#a416e996c9a2dc85ae6a65f7ed877b281", null ],
