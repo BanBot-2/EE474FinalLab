@@ -115,8 +115,6 @@ QueueHandle_t xAlarmQueue;
 TaskHandle_t xTaskRTC;
 /** @brief Task handle for the Liquid Crystal Display update and alarm setting task. */
 TaskHandle_t xTaskLCD;
-/** @brief Task handle for the Alarm LED flashing pattern task. */
-TaskHandle_t xTaskAlarm;
 /** @brief Task handle for the Infrared remote receiver handling task. */
 TaskHandle_t xTaskIR;
 
@@ -189,10 +187,11 @@ void IRAM_ATTR remoteInterrupt() {
 /**
  * @brief Interrupt Service Routine (ISR) triggered by the hardware alarm timer (\ref xAlarmTimer).
  *
- * This ISR notifies the \ref xTaskAlarm to toggle the LED flash pattern.
+ * This ISR toggles the LED alarm flashing pattern.
  */
 void IRAM_ATTR alarmInterrupt() {
-  vTaskNotifyGiveFromISR(xTaskAlarm, NULL);
+  gpio_set_level((gpio_num_t)RED_LED_PIN, !gpio_get_level((gpio_num_t)RED_LED_PIN));    // Toggles red LED
+  gpio_set_level((gpio_num_t)BLUE_LED_PIN, !gpio_get_level((gpio_num_t)BLUE_LED_PIN));  // Toggles blue LED
 }
 
 
@@ -452,22 +451,6 @@ void vTaskRTC(void *pvParameters) {
 }
 
 /**
- * @brief FreeRTOS Task to handle the blinking pattern for the alarm LEDs.
- *
- * This task waits for notifications from the \ref alarmInterrupt (triggered by \ref xAlarmTimer)
- * and toggles the state of the Red and Blue LEDs (\ref RED_LED_PIN, \ref BLUE_LED_PIN) to create a flashing effect.
- *
- * @param pvParameters Not used.
- */
-void vTaskAlarm(void *pvParameters) {
-  while (true) {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);                 // Waits for notification
-    digitalWrite(RED_LED_PIN, !digitalRead(RED_LED_PIN));    // Toggles red LED
-    digitalWrite(BLUE_LED_PIN, !digitalRead(BLUE_LED_PIN));  // Toggles blue LED
-  }
-}
-
-/**
  * @brief FreeRTOS Task to handle the Infrared (IR) remote input.
  *
  * This task processes notifications from the \ref remoteInterrupt and implements an IR
@@ -554,10 +537,9 @@ void setup() {
 
   // Creates tasks
   xTaskCreatePinnedToCore(vTaskRTC, "TaskRTC", 4096, NULL, 5, &xTaskRTC, 1);
-  xTaskCreatePinnedToCore(vTaskLCD, "TaskLCD", 4096, NULL, 3, &xTaskLCD, 0);
+  xTaskCreatePinnedToCore(vTaskLCD, "TaskLCD", 4096, NULL, 2, &xTaskLCD, 0);
   xTaskCreatePinnedToCore(vTaskPhotoPot, "TaskPhotoPot", 2048, NULL, 4, NULL, 1);
-  xTaskCreatePinnedToCore(vTaskAlarm, "TaskAlarm", 2048, NULL, 6, &xTaskAlarm, 0);
-  xTaskCreatePinnedToCore(vTaskIR, "TaskIR", 2048, NULL, 2, &xTaskIR, 1);
+  xTaskCreatePinnedToCore(vTaskIR, "TaskIR", 2048, NULL, 3, &xTaskIR, 1);
 
   // Attaches interupts
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonInterrupt, CHANGE);

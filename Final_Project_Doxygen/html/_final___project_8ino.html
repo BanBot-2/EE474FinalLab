@@ -160,8 +160,6 @@ Functions</h2></td></tr>
 <tr class="memdesc:ad1df5e6d9819d659cc10452328605cc8"><td class="mdescLeft">&#160;</td><td class="mdescRight">FreeRTOS Task for managing the Liquid Crystal Display (LCD) and handling alarm setting logic.  <br /></td></tr>
 <tr class="memitem:a4e8fbdbb1f2d94b6c29ef8844bd59ed8" id="r_a4e8fbdbb1f2d94b6c29ef8844bd59ed8"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4e8fbdbb1f2d94b6c29ef8844bd59ed8">vTaskRTC</a> (void *pvParameters)</td></tr>
 <tr class="memdesc:a4e8fbdbb1f2d94b6c29ef8844bd59ed8"><td class="mdescLeft">&#160;</td><td class="mdescRight">FreeRTOS Task for managing the Real-Time Clock (RTC) module.  <br /></td></tr>
-<tr class="memitem:ad26a77cbf3e145198e075b2d749868c2" id="r_ad26a77cbf3e145198e075b2d749868c2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad26a77cbf3e145198e075b2d749868c2">vTaskAlarm</a> (void *pvParameters)</td></tr>
-<tr class="memdesc:ad26a77cbf3e145198e075b2d749868c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">FreeRTOS Task to handle the blinking pattern for the alarm LEDs.  <br /></td></tr>
 <tr class="memitem:ae10185056957acc7e12db9e208b8ae5a" id="r_ae10185056957acc7e12db9e208b8ae5a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae10185056957acc7e12db9e208b8ae5a">vTaskIR</a> (void *pvParameters)</td></tr>
 <tr class="memdesc:ae10185056957acc7e12db9e208b8ae5a"><td class="mdescLeft">&#160;</td><td class="mdescRight">FreeRTOS Task to handle the Infrared (IR) remote input.  <br /></td></tr>
 <tr class="memitem:aab3069f4d77ffca48dddfc18db78d139" id="r_aab3069f4d77ffca48dddfc18db78d139"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aab3069f4d77ffca48dddfc18db78d139">vTaskPhotoPot</a> (void *pvParameters)</td></tr>
@@ -187,8 +185,6 @@ Variables</h2></td></tr>
 <tr class="memdesc:a9f8ea3e25b30d08dd33a5606e1205019"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task handle for the Real-Time Clock management task.  <br /></td></tr>
 <tr class="memitem:a66cfd2cd23e9023f8b1d5dd0e2a2453b" id="r_a66cfd2cd23e9023f8b1d5dd0e2a2453b"><td class="memItemLeft" align="right" valign="top">TaskHandle_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a66cfd2cd23e9023f8b1d5dd0e2a2453b">xTaskLCD</a></td></tr>
 <tr class="memdesc:a66cfd2cd23e9023f8b1d5dd0e2a2453b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task handle for the Liquid Crystal Display update and alarm setting task.  <br /></td></tr>
-<tr class="memitem:a1da64897d5c20b3a7d2bf32a093ebdbb" id="r_a1da64897d5c20b3a7d2bf32a093ebdbb"><td class="memItemLeft" align="right" valign="top">TaskHandle_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1da64897d5c20b3a7d2bf32a093ebdbb">xTaskAlarm</a></td></tr>
-<tr class="memdesc:a1da64897d5c20b3a7d2bf32a093ebdbb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task handle for the Alarm LED flashing pattern task.  <br /></td></tr>
 <tr class="memitem:aa67b55a7a4ebe800b153e44039dff26b" id="r_aa67b55a7a4ebe800b153e44039dff26b"><td class="memItemLeft" align="right" valign="top">TaskHandle_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa67b55a7a4ebe800b153e44039dff26b">xTaskIR</a></td></tr>
 <tr class="memdesc:aa67b55a7a4ebe800b153e44039dff26b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task handle for the Infrared remote receiver handling task.  <br /></td></tr>
 <tr class="memitem:a6f042c095d72ae17cf54950b00338d73" id="r_a6f042c095d72ae17cf54950b00338d73"><td class="memItemLeft" align="right" valign="top">SemaphoreHandle_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6f042c095d72ae17cf54950b00338d73">xEnabledMutex</a></td></tr>
@@ -561,7 +557,7 @@ Update History</h3>
 </div><div class="memdoc">
 
 <p>Interrupt Service Routine (ISR) triggered by the hardware alarm timer (<a class="el" href="#a34b9730aaf6f5de464edc2c7158980da">xAlarmTimer</a>). </p>
-<p>This ISR notifies the <a class="el" href="#a1da64897d5c20b3a7d2bf32a093ebdbb">xTaskAlarm</a> to toggle the LED flash pattern. </p>
+<p>This ISR toggles the LED alarm flashing pattern. </p>
 
 </div>
 </div>
@@ -670,32 +666,6 @@ Update History</h3>
 
 <p>System initialization function. </p>
 <p>Initializes serial communication, I2C buses for LCD and RTC, configures all peripheral pins, initializes the LCD and RTC modules, creates FreeRTOS synchronization primitives (queues, mutexes), creates all FreeRTOS tasks, and attaches hardware interrupts. </p>
-
-</div>
-</div>
-<a id="ad26a77cbf3e145198e075b2d749868c2" name="ad26a77cbf3e145198e075b2d749868c2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad26a77cbf3e145198e075b2d749868c2">&#9670;&#160;</a></span>vTaskAlarm()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void vTaskAlarm </td>
-          <td>(</td>
-          <td class="paramtype">void *</td>          <td class="paramname"><span class="paramname"><em>pvParameters</em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>FreeRTOS Task to handle the blinking pattern for the alarm LEDs. </p>
-<p>This task waits for notifications from the <a class="el" href="#a080dc77c6611498cdbd9dd6e7a6341cd">alarmInterrupt</a> (triggered by <a class="el" href="#a34b9730aaf6f5de464edc2c7158980da">xAlarmTimer</a>) and toggles the state of the Red and Blue LEDs (<a class="el" href="#ab16f55d54417647f44dca8b11d988f02">RED_LED_PIN</a>, <a class="el" href="#a5a8a44baec34d5355cbfdb6d16786f84">BLUE_LED_PIN</a>) to create a flashing effect.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">pvParameters</td><td>Not used. </td></tr>
-  </table>
-  </dd>
-</dl>
 
 </div>
 </div>
@@ -1030,22 +1000,6 @@ Update History</h3>
 </div><div class="memdoc">
 
 <p>Queue handle for transmitting potentiometer readings (uint16_t) to the LCD task. </p>
-
-</div>
-</div>
-<a id="a1da64897d5c20b3a7d2bf32a093ebdbb" name="a1da64897d5c20b3a7d2bf32a093ebdbb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1da64897d5c20b3a7d2bf32a093ebdbb">&#9670;&#160;</a></span>xTaskAlarm</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">TaskHandle_t xTaskAlarm</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Task handle for the Alarm LED flashing pattern task. </p>
 
 </div>
 </div>
